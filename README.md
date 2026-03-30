@@ -2,6 +2,8 @@
 
 CLI for switching Codex accounts from the terminal.
 
+![codex-switch example](assets/example.png)
+
 ### Features
 
 - **Account Snapshotting**: Automatically detects new Codex accounts and prompts to save them into `~/.codex/myaccounts/snapshots/`.
