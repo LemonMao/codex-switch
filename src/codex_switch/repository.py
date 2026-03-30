@@ -9,6 +9,7 @@ from typing import Any
 
 from codex_switch.cache import AppCache, load_cache, save_cache
 from codex_switch.config import AppPaths
+from codex_switch.usage import UsageSnapshot
 
 
 @dataclass(slots=True)
@@ -126,8 +127,6 @@ class AccountRepository:
         return name
 
     def store_usage_snapshot(self, profile_name: str, usage: Any, fetched_at: int) -> None:
-        from codex_switch.usage import UsageSnapshot
-
         self.cache.usage_by_profile[profile_name] = UsageSnapshot(fetched_at=fetched_at, usage=usage)
         self._persist_cache()
 

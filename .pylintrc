@@ -1,0 +1,11 @@
+[MASTER]
+ignore-paths=^tests/
+
+[MESSAGES CONTROL]
+disable=
+    missing-module-docstring,
+    missing-class-docstring,
+    missing-function-docstring,
+    line-too-long,
+    too-many-instance-attributes,
+    too-many-return-statements

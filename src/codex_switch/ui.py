@@ -362,7 +362,7 @@ class CodexSwitchApp(App[None]):
             group="profile-refresh",
         )
 
-    def action_quit(self) -> None:
+    async def action_quit(self) -> None:
         if self.controller.dialog is not None:
             return
         self.exit()

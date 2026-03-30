@@ -10,7 +10,13 @@ from requests import RequestException
 from codex_switch.cache import AppCache, load_cache, save_cache
 from codex_switch.config import AppPaths
 from codex_switch.repository import AccountRepository
-from codex_switch.usage import UsageRefreshError, UsageResponse, UsageSnapshot, fetch_usage
+from codex_switch.usage import (
+    UsageRefreshError,
+    UsageResponse,
+    UsageSnapshot,
+    fetch_usage,
+    parse_usage_response,
+)
 
 
 @dataclass(slots=True)
@@ -233,8 +239,6 @@ class AccountController:
         if isinstance(usage, UsageResponse):
             return usage
         if isinstance(usage, dict):
-            from codex_switch.usage import parse_usage_response
-
             return parse_usage_response(usage)
         raise TypeError(f"unexpected usage payload: {type(usage)!r}")
 
