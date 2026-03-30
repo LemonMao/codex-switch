@@ -55,6 +55,85 @@ def test_repository_manages_current_profile_and_snapshots(tmp_path):
     assert repo.read_current_snapshot()["tokens"]["account_id"] == "acct-work"
 
 
+def test_repository_backs_up_unsaved_current_profile_before_switching_to_saved_profile(tmp_path):
+    home = tmp_path / "home"
+    codex_dir = home / ".codex"
+    root_dir = codex_dir / "myaccounts"
+    snapshots_dir = root_dir / "snapshots"
+    snapshots_dir.mkdir(parents=True)
+    (codex_dir / "auth.json").parent.mkdir(parents=True, exist_ok=True)
+    (codex_dir / "auth.json").write_text(
+        '{"tokens":{"account_id":"acct-unsaved","access_token":"tok-unsaved"}}\n',
+        encoding="utf-8",
+    )
+    (snapshots_dir / "work.json").write_text(
+        '{"tokens":{"account_id":"acct-work","access_token":"tok-work"}}\n',
+        encoding="utf-8",
+    )
+
+    repo = AccountRepository(AppPaths.from_home(home), now_ns=lambda: 1234567890)
+
+    repo.switch_to_profile("work")
+
+    backup_path = root_dir / "unsaved_profile_1234567890.json"
+    assert backup_path.exists()
+    assert json.loads(backup_path.read_text(encoding="utf-8"))["tokens"]["account_id"] == "acct-unsaved"
+    assert repo.current_profile_name() == "work"
+    assert repo.paths.auth_path.is_symlink()
+
+
+def test_repository_promotes_unsaved_backup_into_snapshots_and_deletes_source(tmp_path):
+    home = tmp_path / "home"
+    codex_dir = home / ".codex"
+    root_dir = codex_dir / "myaccounts"
+    snapshots_dir = root_dir / "snapshots"
+    snapshots_dir.mkdir(parents=True)
+    unsaved_path = root_dir / "unsaved_profile_1234567890.json"
+    unsaved_path.parent.mkdir(parents=True, exist_ok=True)
+    unsaved_path.write_text(
+        '{"tokens":{"account_id":"acct-unsaved","access_token":"tok-unsaved"}}\n',
+        encoding="utf-8",
+    )
+
+    repo = AccountRepository(AppPaths.from_home(home), now_ns=lambda: 1234567890)
+
+    repo.save_unsaved_profile("unsaved_profile_1234567890", "saved-current")
+
+    saved_path = snapshots_dir / "saved-current.json"
+    assert saved_path.exists()
+    assert json.loads(saved_path.read_text(encoding="utf-8"))["tokens"]["account_id"] == "acct-unsaved"
+    assert not unsaved_path.exists()
+
+
+def test_repository_does_not_switch_when_unsaved_backup_write_fails(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    codex_dir = home / ".codex"
+    snapshots_dir = codex_dir / "myaccounts" / "snapshots"
+    snapshots_dir.mkdir(parents=True)
+    (codex_dir / "auth.json").parent.mkdir(parents=True, exist_ok=True)
+    (codex_dir / "auth.json").write_text(
+        '{"tokens":{"account_id":"acct-unsaved","access_token":"tok-unsaved"}}\n',
+        encoding="utf-8",
+    )
+    (snapshots_dir / "work.json").write_text(
+        '{"tokens":{"account_id":"acct-work","access_token":"tok-work"}}\n',
+        encoding="utf-8",
+    )
+
+    repo = AccountRepository(AppPaths.from_home(home), now_ns=lambda: 1234567890)
+
+    def fail_write_json(*_args, **_kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(repo, "_write_json", fail_write_json)
+
+    with pytest.raises(OSError, match="disk full"):
+        repo.switch_to_profile("work")
+
+    assert not repo.paths.auth_path.is_symlink()
+    assert repo.read_current_snapshot()["tokens"]["account_id"] == "acct-unsaved"
+
+
 def test_repository_rejects_profile_names_that_escape_snapshot_dir(tmp_path):
     home = tmp_path / "home"
     codex_dir = home / ".codex"

@@ -6,7 +6,7 @@ from typing import Sequence
 from codex_switch.config import AppPaths
 from codex_switch.controller import AccountController
 from codex_switch.repository import AccountRepository
-from codex_switch.ui import CodexSwitchApp
+import codex_switch.ui as ui_mod
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -34,5 +34,5 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     controller = AccountController(paths)
 
-    CodexSwitchApp(controller).run()
+    ui_mod.CodexSwitchApp(controller).run()
     return 0

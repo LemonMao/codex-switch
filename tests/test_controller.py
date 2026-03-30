@@ -1,3 +1,5 @@
+import json
+
 import requests
 
 from codex_switch.cache import AppCache
@@ -9,6 +11,7 @@ from codex_switch.usage import UsageRateLimit, UsageRefreshError, UsageResponse,
 def test_controller_saves_unsaved_current_profile_and_switches(tmp_path):
     home = tmp_path / "home"
     codex_dir = home / ".codex"
+    root_dir = codex_dir / "myaccounts"
     snapshots_dir = codex_dir / "myaccounts" / "snapshots"
     snapshots_dir.mkdir(parents=True)
     (snapshots_dir / "work.json").write_text(
@@ -22,6 +25,7 @@ def test_controller_saves_unsaved_current_profile_and_switches(tmp_path):
     )
 
     controller = AccountController(AppPaths.from_home(home))
+    controller.repository._now_ns = lambda: 1234567890  # type: ignore[attr-defined]
     controller.reload()
 
     assert controller.rows[0].key == "__current__"
@@ -31,9 +35,48 @@ def test_controller_saves_unsaved_current_profile_and_switches(tmp_path):
     assert controller.selected_row.key == "work"
 
     controller.enter()
+    backup_path = root_dir / "unsaved_profile_1234567890.json"
+    assert backup_path.exists()
+    assert json.loads(backup_path.read_text(encoding="utf-8"))["tokens"]["account_id"] == "acct-current"
     assert controller.dialog is None
     assert controller.current_profile_name() == "work"
     assert controller.paths.auth_path.is_symlink()
+
+
+def test_controller_saves_preserved_unsaved_profile_into_snapshot(tmp_path):
+    home = tmp_path / "home"
+    codex_dir = home / ".codex"
+    root_dir = codex_dir / "myaccounts"
+    snapshots_dir = root_dir / "snapshots"
+    snapshots_dir.mkdir(parents=True)
+    (snapshots_dir / "work.json").write_text(
+        '{"tokens":{"account_id":"acct-work","access_token":"tok-work"}}\n',
+        encoding="utf-8",
+    )
+    (codex_dir / "auth.json").parent.mkdir(parents=True, exist_ok=True)
+    (codex_dir / "auth.json").write_text(
+        '{"tokens":{"account_id":"acct-current","access_token":"tok-current"}}\n',
+        encoding="utf-8",
+    )
+
+    controller = AccountController(AppPaths.from_home(home))
+    controller.repository._now_ns = lambda: 1234567890  # type: ignore[attr-defined]
+    controller.reload()
+    controller.move_selection(1)
+    controller.enter()
+
+    controller.reload()
+    unsaved_index = next(index for index, row in enumerate(controller.rows) if row.key.startswith("unsaved_profile_"))
+    controller.selected_index = unsaved_index
+    controller.dialog = DialogState(kind="save")
+
+    controller.submit_dialog("saved-current")
+
+    saved_path = snapshots_dir / "saved-current.json"
+    assert saved_path.exists()
+    assert json.loads(saved_path.read_text(encoding="utf-8"))["tokens"]["account_id"] == "acct-current"
+    assert not (root_dir / "unsaved_profile_1234567890.json").exists()
+    assert any(row.key == "saved-current" for row in controller.rows)
 
 
 def test_controller_renames_and_deletes_current_profile(tmp_path):

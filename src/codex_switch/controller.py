@@ -60,6 +60,7 @@ class AccountController:
 
     def reload(self) -> None:
         saved_profiles = self.repository.list_saved_profiles()
+        unsaved_profiles = self.repository.list_unsaved_profiles()
         current_snapshot = self.repository.read_current_snapshot()
         current_name = self.repository.current_profile_name()
 
@@ -85,6 +86,20 @@ class AccountController:
                     name=profile.name,
                     is_unsaved=False,
                     is_current=profile.name == current_name,
+                    snapshot=snapshot,
+                    usage=self.cache.usage_by_profile.get(profile.name),
+                    account_status=self.cache.account_status_by_profile.get(profile.name, "active"),
+                )
+            )
+
+        for profile in unsaved_profiles:
+            snapshot = json.loads(profile.path.read_text(encoding="utf-8"))
+            rows.append(
+                ProfileRow(
+                    key=profile.name,
+                    name=profile.name,
+                    is_unsaved=True,
+                    is_current=False,
                     snapshot=snapshot,
                     usage=self.cache.usage_by_profile.get(profile.name),
                     account_status=self.cache.account_status_by_profile.get(profile.name, "active"),
@@ -134,7 +149,11 @@ class AccountController:
         kind = self.dialog.kind
         try:
             if kind == "save":
-                self.repository.save_current_profile(value)
+                row = self.selected_row
+                if row is not None and row.is_unsaved and row.key != "__current__":
+                    self.repository.save_unsaved_profile(row.key, value)
+                else:
+                    self.repository.save_current_profile(value)
             elif kind == "rename":
                 if self.dialog.target_name is None:
                     return

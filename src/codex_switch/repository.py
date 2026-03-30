@@ -4,8 +4,9 @@ from dataclasses import dataclass
 from pathlib import Path
 import json
 import os
+import time
 import shutil
-from typing import Any
+from typing import Any, Callable
 
 from codex_switch.cache import AppCache, load_cache, save_cache
 from codex_switch.config import AppPaths
@@ -19,9 +20,15 @@ class ProfileRecord:
 
 
 class AccountRepository:
-    def __init__(self, paths: AppPaths, cache: AppCache | None = None) -> None:
+    def __init__(
+        self,
+        paths: AppPaths,
+        cache: AppCache | None = None,
+        now_ns: Callable[[], int] | None = None,
+    ) -> None:
         self.paths = paths
         self.cache = cache or load_cache(paths.cache_path)
+        self._now_ns = now_ns or time.time_ns
 
     def list_saved_profiles(self) -> list[ProfileRecord]:
         if not self.paths.snapshots_dir.exists():
@@ -29,6 +36,16 @@ class AccountRepository:
         profiles = [
             ProfileRecord(name=item.stem, path=item)
             for item in self.paths.snapshots_dir.glob("*.json")
+            if item.is_file()
+        ]
+        return sorted(profiles, key=lambda profile: profile.name)
+
+    def list_unsaved_profiles(self) -> list[ProfileRecord]:
+        if not self.paths.root_dir.exists():
+            return []
+        profiles = [
+            ProfileRecord(name=item.stem, path=item)
+            for item in self.paths.root_dir.glob("unsaved_profile_*.json")
             if item.is_file()
         ]
         return sorted(profiles, key=lambda profile: profile.name)
@@ -70,10 +87,23 @@ class AccountRepository:
         self._ensure_dirs()
         self._write_json(destination, snapshot)
         self._link_auth_to_snapshot(destination)
-        if "__current__" in self.cache.usage_by_profile:
-            self.cache.usage_by_profile[name] = self.cache.usage_by_profile.pop("__current__")
-        if "__current__" in self.cache.account_status_by_profile:
-            self.cache.account_status_by_profile[name] = self.cache.account_status_by_profile.pop("__current__")
+        self._move_profile_cache("__current__", name)
+        self.cache.selected_profile = name
+        self._persist_cache()
+        return name
+
+    def save_unsaved_profile(self, source_name: str, name: str) -> str:
+        source = self._unsaved_profile_path(source_name)
+        destination = self._snapshot_path(name)
+        if not source.exists():
+            raise FileNotFoundError(f"unsaved profile not found: {source_name}")
+        if destination.exists():
+            raise FileExistsError(f"saved profile already exists: {name}")
+        snapshot = json.loads(source.read_text(encoding="utf-8"))
+        self._ensure_dirs()
+        self._write_json(destination, snapshot)
+        source.unlink()
+        self._move_profile_cache(source_name, name)
         self.cache.selected_profile = name
         self._persist_cache()
         return name
@@ -83,7 +113,14 @@ class AccountRepository:
         if not snapshot.exists():
             raise FileNotFoundError(f"saved profile not found: {name}")
         self._ensure_dirs()
+        unsaved_name: str | None = None
+        if self._current_auth_is_unsaved():
+            unsaved_name = f"unsaved_profile_{self._now_ns()}"
+            backup_path = self._unsaved_profile_path(unsaved_name)
+            self._write_json(backup_path, self._read_active_snapshot())
         self._link_auth_to_snapshot(snapshot)
+        if unsaved_name is not None:
+            self._move_profile_cache("__current__", unsaved_name)
         self.cache.selected_profile = name
         self._persist_cache()
         return name
@@ -146,6 +183,10 @@ class AccountRepository:
         self._validate_profile_name(name)
         return self.paths.snapshots_dir / f"{name}.json"
 
+    def _unsaved_profile_path(self, name: str) -> Path:
+        self._validate_profile_name(name)
+        return self.paths.root_dir / f"{name}.json"
+
     def _validate_profile_name(self, name: str) -> None:
         if not isinstance(name, str) or not name.strip():
             raise ValueError("invalid profile name")
@@ -160,6 +201,17 @@ class AccountRepository:
         if not self.paths.auth_path.exists():
             raise FileNotFoundError(f"no Codex auth file found at {self.paths.auth_path}")
         return json.loads(self.paths.auth_path.read_text(encoding="utf-8"))
+
+    def _current_auth_is_unsaved(self) -> bool:
+        return self.paths.auth_path.exists() and not self.paths.auth_path.is_symlink()
+
+    def _move_profile_cache(self, source_name: str, destination_name: str) -> None:
+        if source_name in self.cache.usage_by_profile:
+            self.cache.usage_by_profile[destination_name] = self.cache.usage_by_profile.pop(source_name)
+        if source_name in self.cache.account_status_by_profile:
+            self.cache.account_status_by_profile[destination_name] = self.cache.account_status_by_profile.pop(source_name)
+        if self.cache.selected_profile == source_name:
+            self.cache.selected_profile = destination_name
 
     def _link_auth_to_snapshot(self, snapshot: Path) -> None:
         if self.paths.auth_path.exists() or self.paths.auth_path.is_symlink():
