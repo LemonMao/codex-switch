@@ -1,0 +1,1 @@
+"""codex-switch Python package."""

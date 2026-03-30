@@ -1,0 +1,61 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.ipynb_checkpoints/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.claude/
+.codex/
+.gitnexus/
+.github/
+
+# Tags / index files
+.tags
+.tags.lock
+tags
+TAGS
+GTAGS
+GPATH
+GRTAGS
+cscope.out
+cscope.files
+cscope.in.out
+cscope.po.out
+gtags
+gtags.files
+gtags.root
+.env
+.env.*
+!.env.example
+.python-version
+
+# Worktree / linked checkout artifacts
+.worktree/
+worktree/
+.worktrees/
+.git-worktree/
+
+# Build / distribution
+build/
+dist/
+.eggs/
+pip-wheel-metadata/
