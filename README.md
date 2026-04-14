@@ -13,30 +13,30 @@ CLI for switching Codex accounts from the terminal.
 
 ### Prerequisites
 
-- [uv](https://github.com/astral-sh/uv) (recommended) or `pip`.
-- Python 3.8 or higher.
+- [uv](https://github.com/astral-sh/uv) (recommended).
+- Python 3.10 or higher.
 
 ### Installation
 
-Clone the repository and install the package:
+Clone the repository first:
 
 ```bash
-git clone <repository-url> && cd codex-switch
-uv pip install --system .
+git clone <repository-url>
+cd codex-switch
+uv tool install .
 ```
 
-If the system Python environment requires elevated permissions:
+
+#### Development
+
+If you are working on `codex-switch` itself and want to run the test suite, install the dev group:
 
 ```bash
-sudo "$(command -v uv)" pip install --system .
+uv sync --group dev
+uv run pytest
 ```
 
-**Verification:**
-
-```bash
-command -v codex-switch
-codex-switch --help
-```
+This keeps `pytest` and `pytest-cov` out of the runtime install while still making them available for local testing.
 
 ### Usage
 
